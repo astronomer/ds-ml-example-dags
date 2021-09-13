@@ -1,0 +1,5 @@
+apache-airflow-providers-google
+pandas
+sklearn
+lightgbm
+google-cloud-bigquery[bqstorage,pandas]
