@@ -1,6 +1,8 @@
 from airflow.decorators import task, dag
 from airflow.models import DAG
+from airflow.models.taskinstance import TaskInstance
 from airflow.utils.dates import days_ago
+from airflow import macros
 
 from datetime import datetime
 import json
@@ -105,8 +107,11 @@ def using_gcs_for_xcom_ds():
         return np.mean(n_scores)
 
     @task
-    def fit(accuracy: float, df: pd.date_range): 
+    def fit(accuracy: float, **kwargs): 
+
         if accuracy >= .8:
+            df = kwargs['ti'].xcom_pull(task_ids='feature_engineering')
+
             print(f'Training accuracy is {accuracy}. Building Model!')
             y = df['never_married'].values
             X = df.drop(columns=['never_married']).values
@@ -118,12 +123,15 @@ def using_gcs_for_xcom_ds():
             return model.booster_.dump_model()
 
         else:
-            print('Training accuracy ({accuracy}) too low.')
+            return 'Training accuracy ({accuracy}) too low.'
 
 
     df = load_data()
     clean_data = preprocessing(df)
     features = feature_engineering(clean_data)
-    fit(train(features), features)
+    accuracy = train(features)
+    fit(accuracy)
 
+    # fit(train(feature_engineering(preprocessing(load_data()))))
+    
 dag = using_gcs_for_xcom_ds()
