@@ -1,24 +1,14 @@
 from airflow.decorators import task, dag
 from airflow.models import DAG
-from airflow.models.taskinstance import TaskInstance
 from airflow.utils.dates import days_ago
 from airflow import macros
 
 from datetime import datetime
-import json
-import lightgbm
-# import math
-# import matplotlib.pyplot as plt
-# import seaborn as sns
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split, RepeatedStratifiedKFold
-from sklearn.metrics import recall_score, auc, accuracy_score, roc_auc_score, roc_curve
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
+from sklearn.model_selection import RepeatedStratifiedKFold
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import cross_val_score
-from sklearn.metrics import classification_report, confusion_matrix
 
 from lightgbm import LGBMClassifier
 
@@ -35,6 +25,8 @@ def using_gcs_for_xcom_ds():
 
     @task
     def load_data():
+        """Pull Census data from Public BigQuery and save as Pandas dataframe in GCS bucket with XCom"""
+
         client = bigquery.Client()
         sql = """
         SELECT * FROM `bigquery-public-data.ml_datasets.census_adult_income`
@@ -45,6 +37,14 @@ def using_gcs_for_xcom_ds():
 
     @task
     def preprocessing(df: pd.DataFrame):
+        """Clean Data and prepare for feature engineering
+        
+        Returns pandas dataframe via Xcom to GCS bucket.
+
+        Keyword arguments:
+        df -- Raw data pulled from BigQuery to be processed. 
+        """
+
         df.dropna(inplace=True)
         df.drop_duplicates(inplace=True)
 
@@ -68,6 +68,14 @@ def using_gcs_for_xcom_ds():
 
     @task
     def feature_engineering(df: pd.DataFrame):
+        """Feature engineering
+        
+        Returns pandas dataframe via XCom to GCS bucket.
+
+        Keyword arguments:
+        df -- data from previous step pulled from BigQuery to be processed. 
+        """
+
         
         # Onehot encoding 
         df = pd.get_dummies(df, prefix='workclass', columns=['workclass'])
@@ -95,6 +103,14 @@ def using_gcs_for_xcom_ds():
 
     @task
     def train(df: pd.DataFrame):
+        """Train and validate model
+        
+        Returns accuracy score via XCom to GCS bucket.
+
+        Keyword arguments:
+        df -- data from previous step pulled from BigQuery to be processed. 
+        """
+
         y = df['never_married'].values
         X = df.drop(columns=['never_married']).values
 
@@ -108,8 +124,19 @@ def using_gcs_for_xcom_ds():
 
     @task
     def fit(accuracy: float, **kwargs): 
+        """Fit the final model
+        
+        Determines if accuracy meets predefined threshold to go ahead and fit model on full data set.
 
+        Returns lightgbm model as json via XCom to GCS bucket.
+        
+
+        Keyword arguments:
+        accuracy -- average accuracy score as determined by CV. 
+        """
         if accuracy >= .8:
+
+            # Reuse data produced by the feauture_engineering task by pulling from GCS bucket via XCom
             df = kwargs['ti'].xcom_pull(task_ids='feature_engineering')
 
             print(f'Training accuracy is {accuracy}. Building Model!')
