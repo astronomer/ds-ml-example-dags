@@ -13,6 +13,7 @@ from lightgbm import LGBMClassifier
 from google.cloud import bigquery
 
 
+
 @dag(
     default_args={'owner': 'airflow'},
     start_date=days_ago(2),
@@ -25,12 +26,13 @@ def using_gcs_for_xcom_ds():
     def load_data():
         """Pull Census data from Public BigQuery and save as Pandas dataframe in GCS bucket with XCom"""
 
-        client = bigquery.Client()
+        bq = BigQueryHook()
         sql = """
         SELECT * FROM `bigquery-public-data.ml_datasets.census_adult_income`
         """
-        raw_data = client.query(sql).to_dataframe()
-        return raw_data
+
+        return bq.get_pandas_df(sql=sql, dialect='standard')
+
 
 
     @task
