@@ -1,7 +1,6 @@
 from airflow.decorators import task, dag
 from airflow.models import DAG
 from airflow.utils.dates import days_ago
-from airflow import macros
 
 from datetime import datetime
 import pandas as pd
