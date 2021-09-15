@@ -10,7 +10,7 @@ from sklearn.model_selection import cross_val_score
 
 from lightgbm import LGBMClassifier
 
-from google.cloud import bigquery
+from airflow.providers.google.cloud.hooks.bigquery import BigQueryHook
 
 
 
