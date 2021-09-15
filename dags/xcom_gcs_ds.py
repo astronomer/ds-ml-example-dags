@@ -7,7 +7,6 @@ from datetime import datetime
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import RepeatedStratifiedKFold
-from sklearn.metrics import accuracy_score
 from sklearn.model_selection import cross_val_score
 
 from lightgbm import LGBMClassifier
@@ -68,7 +67,7 @@ def using_gcs_for_xcom_ds():
 
     @task
     def feature_engineering(df: pd.DataFrame):
-        """Feature engineering
+        """Feature engineering step
         
         Returns pandas dataframe via XCom to GCS bucket.
 
@@ -159,6 +158,7 @@ def using_gcs_for_xcom_ds():
     accuracy = train(features)
     fit(accuracy)
 
+    # Alternate method to set up task dependencies
     # fit(train(feature_engineering(preprocessing(load_data()))))
     
 dag = using_gcs_for_xcom_ds()
