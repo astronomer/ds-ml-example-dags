@@ -12,7 +12,10 @@ from lightgbm import LGBMClassifier
 
 from airflow.providers.google.cloud.hooks.bigquery import BigQueryHook
 
-
+docs = """
+By default, Airflow stores all return values in XCom. However, this can introduce complexity, as users then have to consider the size of data they are returning. Futhermore, since xcoms are stored in the Airflow database by default, intermediary data is not easily accessible by external systems.
+By using an external XCom backend, users can easily push and pull all intermediary data generated in their DAG in GCS.
+"""
 
 @dag(
     default_args={'owner': 'airflow'},
@@ -163,3 +166,4 @@ def using_gcs_for_xcom_ds():
     # fit(train(feature_engineering(preprocessing(load_data()))))
     
 dag = using_gcs_for_xcom_ds()
+dag.doc_md = docs
