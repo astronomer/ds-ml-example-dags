@@ -1,3 +1,5 @@
+## Source https://medium.com/apache-airflow/airflow-2-0-dag-authoring-redesigned-651edc397178
+
 from typing import Any
 from airflow.models.xcom import BaseXCom
 from airflow.providers.google.cloud.hooks.gcs import GCSHook
