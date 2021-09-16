@@ -8,5 +8,5 @@ In an effort to keep the examples easy to follow, much of the data processing an
 
 1. `xcom_gcs_ds.py` - A simple DS pipeline from data extraction to modeling.
     - Pulls data from BigQuery using the Google Provider (BigQueryHook) into a dataframe that preps, trains, and builds the model
-    - Data is passed between the tasks using XComs (link to xcom docs)
+    - Data is passed between the tasks using [XComs](https://airflow.apache.org/docs/apache-airflow/stable/concepts/xcoms.html)
     - Uses GCS as an XCOM backend to easily track intermediary data in a scalable, external system
