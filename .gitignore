@@ -6,3 +6,5 @@ airflow_settings.yaml
 .vim/
 Pip*
 *DS_Store
+.vscode/
+ml-env/

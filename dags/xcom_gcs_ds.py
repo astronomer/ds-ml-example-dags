@@ -1,48 +1,51 @@
 from airflow.decorators import task, dag
-from airflow.models import DAG
-from airflow.utils.dates import days_ago
+from airflow.providers.google.cloud.hooks.bigquery import BigQueryHook
 
 from datetime import datetime
-import json
-import lightgbm
-# import math
-# import matplotlib.pyplot as plt
-# import seaborn as sns
+
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split, RepeatedStratifiedKFold
-from sklearn.metrics import recall_score, auc, accuracy_score, roc_auc_score, roc_curve
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
-from sklearn.metrics import accuracy_score
+from sklearn.model_selection import RepeatedStratifiedKFold
 from sklearn.model_selection import cross_val_score
-from sklearn.metrics import classification_report, confusion_matrix
-
 from lightgbm import LGBMClassifier
 
-from google.cloud import bigquery
 
+docs = """
+By default, Airflow stores all return values in XCom. However, this can introduce complexity, as users then have to consider the size of data they are returning. Futhermore, since XComs are stored in the Airflow database by default, intermediary data is not easily accessible by external systems.
+By using an external XCom backend, users can easily push and pull all intermediary data generated in their DAG in GCS.
+"""
 
 @dag(
-    default_args={'owner': 'airflow'},
-    start_date=days_ago(2),
+    start_date=datetime(2021, 1, 1),
     schedule_interval=None,
-    catchup=False
+    catchup=False,
+    doc_md=docs
 )
 def using_gcs_for_xcom_ds():
 
     @task
     def load_data():
-        client = bigquery.Client()
+        """Pull Census data from Public BigQuery and save as Pandas dataframe in GCS bucket with XCom"""
+
+        bq = BigQueryHook()
         sql = """
         SELECT * FROM `bigquery-public-data.ml_datasets.census_adult_income`
         """
-        raw_data = client.query(sql).to_dataframe()
-        return raw_data
+
+        return bq.get_pandas_df(sql=sql, dialect='standard')
+
 
 
     @task
     def preprocessing(df: pd.DataFrame):
+        """Clean Data and prepare for feature engineering
+        
+        Returns pandas dataframe via Xcom to GCS bucket.
+
+        Keyword arguments:
+        df -- Raw data pulled from BigQuery to be processed. 
+        """
+
         df.dropna(inplace=True)
         df.drop_duplicates(inplace=True)
 
@@ -66,6 +69,14 @@ def using_gcs_for_xcom_ds():
 
     @task
     def feature_engineering(df: pd.DataFrame):
+        """Feature engineering step
+        
+        Returns pandas dataframe via XCom to GCS bucket.
+
+        Keyword arguments:
+        df -- data from previous step pulled from BigQuery to be processed. 
+        """
+
         
         # Onehot encoding 
         df = pd.get_dummies(df, prefix='workclass', columns=['workclass'])
@@ -93,6 +104,14 @@ def using_gcs_for_xcom_ds():
 
     @task
     def train(df: pd.DataFrame):
+        """Train and validate model
+        
+        Returns accuracy score via XCom to GCS bucket.
+
+        Keyword arguments:
+        df -- data from previous step pulled from BigQuery to be processed. 
+        """
+
         y = df['never_married'].values
         X = df.drop(columns=['never_married']).values
 
@@ -105,8 +124,22 @@ def using_gcs_for_xcom_ds():
         return np.mean(n_scores)
 
     @task
-    def fit(accuracy: float, df: pd.date_range): 
+    def fit(accuracy: float, ti=None): 
+        """Fit the final model
+        
+        Determines if accuracy meets predefined threshold to go ahead and fit model on full data set.
+
+        Returns lightgbm model as json via XCom to GCS bucket.
+        
+
+        Keyword arguments:
+        accuracy -- average accuracy score as determined by CV. 
+        """
         if accuracy >= .8:
+
+            # Reuse data produced by the feauture_engineering task by pulling from GCS bucket via XCom
+            df = ti.xcom_pull(task_ids='feature_engineering')
+
             print(f'Training accuracy is {accuracy}. Building Model!')
             y = df['never_married'].values
             X = df.drop(columns=['never_married']).values
@@ -118,12 +151,16 @@ def using_gcs_for_xcom_ds():
             return model.booster_.dump_model()
 
         else:
-            print('Training accuracy ({accuracy}) too low.')
+            return 'Training accuracy ({accuracy}) too low.'
 
 
     df = load_data()
     clean_data = preprocessing(df)
     features = feature_engineering(clean_data)
-    fit(train(features), features)
+    accuracy = train(features)
+    fit(accuracy)
 
+    # Alternate method to set up task dependencies
+    # fit(train(feature_engineering(preprocessing(load_data()))))
+    
 dag = using_gcs_for_xcom_ds()
