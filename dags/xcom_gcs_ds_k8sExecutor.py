@@ -21,6 +21,7 @@ Additionally using this with the Kubernetes Executor allows more fine grained co
 """
 
 
+# Pod Config for the load_data task. This sets resource requests and limits for cpu and memory so that the Pod has enough memory to execute the task.
 load_config={ "pod_override": k8s.V1Pod(
                 metadata=k8s.V1ObjectMeta(labels={"purpose": "load_bq_data"}),
                 spec=k8s.V1PodSpec(
@@ -44,6 +45,7 @@ load_config={ "pod_override": k8s.V1Pod(
             }
 
 
+# Pod Config for train and fit tasks. This sets resource requests and limits for cpu and memory so that the Pod perform the tasks more quickly from minutes to seconds.
 modeling_config={ "pod_override": k8s.V1Pod(
                 metadata=k8s.V1ObjectMeta(labels={"purpose": "modeling"}),
                 spec=k8s.V1PodSpec(
