@@ -12,5 +12,6 @@ In an effort to keep the examples easy to follow, much of the data processing an
     - Uses GCS as an Xcom backend to easily track intermediary data in a scalable, external system
 
 2. `xcom_gcs_ds_k8sExecutor.py` - A simple DS pipeline from data extraction to modeling that leverages the flexibility of the [Kubernetes Executor](https://www.astronomer.io/blog/new-kubernetesexecutor).
+    - This DAG can only be used with the Kubernetes Executor. 
     - All components from example #1 except that each task is now executed in its own pod with custom configs.
     - Uses `pod_override` to provide more resources to tasks to enable proper or faster execution.
