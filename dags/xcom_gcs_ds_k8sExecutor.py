@@ -45,7 +45,7 @@ load_config={ "pod_override": k8s.V1Pod(
             }
 
 
-# Pod Config for train and fit tasks. This sets resource requests and limits for cpu and memory so that the Pod perform the tasks more quickly from minutes to seconds.
+# Pod Config for train and fit tasks. This sets resource requests and limits for cpu and memory so that the Pod can perform the tasks more quickly. Reduces execution time from minutes to seconds compared to without the use of `KubernetesExecutor`.
 modeling_config={ "pod_override": k8s.V1Pod(
                 metadata=k8s.V1ObjectMeta(labels={"purpose": "modeling"}),
                 spec=k8s.V1PodSpec(
