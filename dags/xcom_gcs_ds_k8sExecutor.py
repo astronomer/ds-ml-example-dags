@@ -1,4 +1,3 @@
-from typing import Container
 from airflow.decorators import task, dag
 from airflow.providers.google.cloud.hooks.bigquery import BigQueryHook
 
