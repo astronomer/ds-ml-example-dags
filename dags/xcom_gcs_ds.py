@@ -103,7 +103,7 @@ def using_gcs_for_xcom_ds():
 
 
     @task
-    def train(df: pd.DataFrame):
+    def cross_validation(df: pd.DataFrame):
         """Train and validate model
         
         Returns accuracy score via XCom to GCS bucket.
@@ -157,7 +157,7 @@ def using_gcs_for_xcom_ds():
     df = load_data()
     clean_data = preprocessing(df)
     features = feature_engineering(clean_data)
-    accuracy = train(features)
+    accuracy = cross_validation(features)
     fit(accuracy)
 
     # Alternate method to set up task dependencies
