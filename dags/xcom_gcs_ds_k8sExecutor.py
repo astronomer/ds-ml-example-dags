@@ -3,7 +3,7 @@ from airflow.providers.google.cloud.hooks.bigquery import BigQueryHook
 
 from datetime import datetime
 from kubernetes.client import models as k8s
-
+from io import StringIO
 
 import pandas as pd
 import numpy as np
@@ -21,7 +21,7 @@ Additionally using this with the Kubernetes Executor allows more fine grained co
 
 
 # Pod Config for the load_data task. This sets resource requests and limits for cpu and memory so that the Pod has enough memory to execute the task.
-load_config={ "pod_override": k8s.V1Pod(
+etl_config={ "pod_override": k8s.V1Pod(
                 metadata=k8s.V1ObjectMeta(labels={"purpose": "load_bq_data"}),
                 spec=k8s.V1PodSpec(
                     containers=[
@@ -76,7 +76,7 @@ modeling_config={ "pod_override": k8s.V1Pod(
 )
 def using_gcs_for_xcom_ds_k8sExec():
 
-    @task(executor_config=load_config)
+    @task(executor_config=etl_config)
     def load_data():
         """Pull Census data from Public BigQuery and save as Pandas dataframe in GCS bucket with XCom"""
 
@@ -120,7 +120,7 @@ def using_gcs_for_xcom_ds_k8sExec():
 
         return df
 
-    @task
+    @task(executor_config=etl_config)
     def feature_engineering(df: pd.DataFrame):
         """Feature engineering step
         
@@ -152,7 +152,7 @@ def using_gcs_for_xcom_ds_k8sExec():
         # Drop redundant colulmn
         df.drop(columns=['income_bracket_<=50K', 'marital_status', 'age'], inplace=True)
 
-        return df
+        return {'X': df.drop(columns=['never_married']).to_json(orient='index'), 'y':  df['never_married'].to_json(orient='index')}
 
 
     @task(executor_config=modeling_config)
@@ -165,9 +165,8 @@ def using_gcs_for_xcom_ds_k8sExec():
         df -- data from previous step pulled from BigQuery to be processed. 
         """
 
-        y = df['never_married'].values
-        X = df.drop(columns=['never_married']).values
-
+        y = pd.read_json(StringIO(df['y']), orient='index').values
+        X = pd.read_json(StringIO(df['X']), orient='index').values
 
         model = LGBMClassifier()
         cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=3, random_state=1)
@@ -194,9 +193,9 @@ def using_gcs_for_xcom_ds_k8sExec():
             df = ti.xcom_pull(task_ids='feature_engineering')
 
             print(f'Training accuracy is {accuracy}. Building Model!')
-            y = df['never_married'].values
-            X = df.drop(columns=['never_married']).values
 
+            y = pd.read_json(StringIO(df['y']), orient='index').values
+            X = pd.read_json(StringIO(df['X']), orient='index').values
 
             model = LGBMClassifier()
             model.fit(X, y)
