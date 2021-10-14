@@ -2,6 +2,8 @@ from airflow.decorators import task, dag
 from airflow.providers.google.cloud.hooks.bigquery import BigQueryHook
 
 from datetime import datetime
+from kubernetes.client import models as k8s
+from io import StringIO
 
 import pandas as pd
 import numpy as np
@@ -13,7 +15,58 @@ from lightgbm import LGBMClassifier
 docs = """
 By default, Airflow stores all return values in XCom. However, this can introduce complexity, as users then have to consider the size of data they are returning. Futhermore, since XComs are stored in the Airflow database by default, intermediary data is not easily accessible by external systems.
 By using an external XCom backend, users can easily push and pull all intermediary data generated in their DAG in GCS.
+
+Additionally using this with the Kubernetes Executor allows more fine grained control over the resources, images, and dependencies for each step on a per task basis.
 """
+
+
+# Pod Config for the load_data task. This sets resource requests and limits for cpu and memory so that the Pod has enough memory to execute the task.
+etl_config={ "pod_override": k8s.V1Pod(
+                metadata=k8s.V1ObjectMeta(labels={"purpose": "load_bq_data"}),
+                spec=k8s.V1PodSpec(
+                    containers=[
+                        k8s.V1Container(
+                            name="base",
+                            resources=k8s.V1ResourceRequirements(
+                                limits={
+                                    "cpu": 1,
+                                    "memory": "8Gi"
+                                },
+                                requests={
+                                    "cpu": 0.5,
+                                    "memory": "5Gi"
+                                }
+                            )
+                            )
+                        ]
+                    )
+                )
+            }
+
+
+# Pod Config for train and fit tasks. This sets resource requests and limits for cpu and memory so that the Pod can perform the tasks more quickly. Reduces execution time from minutes to seconds compared to without the use of `KubernetesExecutor`.
+modeling_config={ "pod_override": k8s.V1Pod(
+                metadata=k8s.V1ObjectMeta(labels={"purpose": "modeling"}),
+                spec=k8s.V1PodSpec(
+                    containers=[
+                        k8s.V1Container(
+                            name="base",
+                            resources=k8s.V1ResourceRequirements(
+                                limits={
+                                    "cpu": 2,
+                                    "memory": "8Gi"
+                                },
+                                requests={
+                                    "cpu": 1,
+                                    "memory": "5Gi"
+                                }
+                            )
+                            )
+                        ]
+                    )
+                )
+            }
+
 
 @dag(
     start_date=datetime(2021, 1, 1),
@@ -21,9 +74,9 @@ By using an external XCom backend, users can easily push and pull all intermedia
     catchup=False,
     doc_md=docs
 )
-def using_gcs_for_xcom_ds():
+def using_gcs_for_xcom_ds_k8sExec():
 
-    @task
+    @task(executor_config=etl_config)
     def load_data():
         """Pull Census data from Public BigQuery and save as Pandas dataframe in GCS bucket with XCom"""
 
@@ -40,7 +93,7 @@ def using_gcs_for_xcom_ds():
     def preprocessing(df: pd.DataFrame):
         """Clean Data and prepare for feature engineering
         
-        Returns pandas dataframe via Xcom to GCS bucket.
+        Returns pandas dataframe via XCom to GCS bucket.
 
         Keyword arguments:
         df -- Raw data pulled from BigQuery to be processed. 
@@ -67,7 +120,7 @@ def using_gcs_for_xcom_ds():
 
         return df
 
-    @task
+    @task(executor_config=etl_config)
     def feature_engineering(df: pd.DataFrame):
         """Feature engineering step
         
@@ -99,10 +152,10 @@ def using_gcs_for_xcom_ds():
         # Drop redundant colulmn
         df.drop(columns=['income_bracket_<=50K', 'marital_status', 'age'], inplace=True)
 
-        return df
+        return {'X': df.drop(columns=['never_married']).to_json(orient='index'), 'y':  df['never_married'].to_json(orient='index')}
 
 
-    @task
+    @task(executor_config=modeling_config)
     def cross_validation(df: pd.DataFrame):
         """Train and validate model
         
@@ -112,9 +165,8 @@ def using_gcs_for_xcom_ds():
         df -- data from previous step pulled from BigQuery to be processed. 
         """
 
-        y = df['never_married'].values
-        X = df.drop(columns=['never_married']).values
-
+        y = pd.read_json(StringIO(df['y']), orient='index').values
+        X = pd.read_json(StringIO(df['X']), orient='index').values
 
         model = LGBMClassifier()
         cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=3, random_state=1)
@@ -123,7 +175,7 @@ def using_gcs_for_xcom_ds():
 
         return np.mean(n_scores)
 
-    @task
+    @task(executor_config=modeling_config)
     def fit(accuracy: float, ti=None): 
         """Fit the final model
         
@@ -141,9 +193,9 @@ def using_gcs_for_xcom_ds():
             df = ti.xcom_pull(task_ids='feature_engineering')
 
             print(f'Training accuracy is {accuracy}. Building Model!')
-            y = df['never_married'].values
-            X = df.drop(columns=['never_married']).values
 
+            y = pd.read_json(StringIO(df['y']), orient='index').values
+            X = pd.read_json(StringIO(df['X']), orient='index').values
 
             model = LGBMClassifier()
             model.fit(X, y)
@@ -163,4 +215,4 @@ def using_gcs_for_xcom_ds():
     # Alternate method to set up task dependencies
     # fit(train(feature_engineering(preprocessing(load_data()))))
     
-dag = using_gcs_for_xcom_ds()
+dag = using_gcs_for_xcom_ds_k8sExec()
