@@ -1,3 +1,8 @@
+"""
+By default, Airflow stores all return values in XCom. However, this can introduce complexity, as users then have to consider the size of data they are returning. Futhermore, since XComs are stored in the Airflow database by default, intermediary data is not easily accessible by external systems.
+By using an external XCom backend, users can easily push and pull all intermediary data generated in their DAG in GCS.
+"""
+
 from airflow.decorators import task, dag
 from airflow.providers.google.cloud.hooks.bigquery import BigQueryHook
 
@@ -9,17 +14,11 @@ from sklearn.model_selection import RepeatedStratifiedKFold
 from sklearn.model_selection import cross_val_score
 from lightgbm import LGBMClassifier
 
-
-docs = """
-By default, Airflow stores all return values in XCom. However, this can introduce complexity, as users then have to consider the size of data they are returning. Futhermore, since XComs are stored in the Airflow database by default, intermediary data is not easily accessible by external systems.
-By using an external XCom backend, users can easily push and pull all intermediary data generated in their DAG in GCS.
-"""
-
 @dag(
     start_date=datetime(2021, 1, 1),
     schedule_interval=None,
     catchup=False,
-    doc_md=docs
+    doc_md=__doc__,
 )
 def using_gcs_for_xcom_ds():
 

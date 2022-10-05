@@ -1,4 +1,4 @@
-FROM quay.io/astronomer/ap-airflow:2.1.3-1-buster-onbuild
+FROM quay.io/astronomer/astro-runtime:6.0.2
 
 ENV AIRFLOW__CORE__XCOM_BACKEND=include.gcs_xcom_backend.GCSXComBackend
 
