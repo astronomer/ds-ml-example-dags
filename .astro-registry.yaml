@@ -1,0 +1,9 @@
+# These categories will be applied to all DAGs in the repo.
+categories:
+  - AI + Machine Learning
+  - Big Data and Analytics
+  - Airflow Fundamentals
+# List of DAGs that should be published to the Astronomer Registry.
+dags:
+  - path: dags/xcom_gcs_ds_k8sExecutor.py
+  - path: dags/xcom_gcs_ds.py
